@@ -5,7 +5,7 @@ const readline_1 = require("readline");
 const child_process_1 = require("child_process");
 const util_1 = require("util");
 const execAsync = (0, util_1.promisify)(child_process_1.exec);
-const repoUrl = 'https://github.com/payloadcms/website.git';
+const repoUrl = 'https://github.com/blok0-payload/starter.git';
 function prompt(question) {
     return new Promise((resolve) => {
         const rl = (0, readline_1.createInterface)({

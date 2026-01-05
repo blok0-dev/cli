@@ -4,7 +4,7 @@ import { promisify } from 'util';
 
 const execAsync = promisify(exec);
 
-const repoUrl = 'https://github.com/payloadcms/website.git';
+const repoUrl = 'https://github.com/blok0-payload/starter.git';
 
 function prompt(question: string): Promise<boolean> {
   return new Promise((resolve) => {

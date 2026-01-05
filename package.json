@@ -1,0 +1,25 @@
+{
+  "name": "blok0",
+  "version": "0.1.0",
+  "description": "CLI tool for Payload CMS scaffolding",
+  "main": "dist/index.js",
+  "bin": {
+    "blok0": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "bun run tsc",
+    "dev": "bun run tsx src/index.ts"
+  },
+  "keywords": ["cli", "payload", "cms"],
+  "author": "Your Name",
+  "license": "MIT",
+  "dependencies": {
+    "payload": "^2.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "bun-types": "^1.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.0.0"
+  }
+}

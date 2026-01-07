@@ -1,45 +1,35 @@
-#!/usr/bin/env bun
+#!/usr/bin/env node
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
-const fs_1 = require("fs");
-const readline_1 = require("readline");
-const detectors_1 = require("./detectors");
-const generate_1 = require("./handlers/generate");
-function prompt(question) {
-    return new Promise((resolve) => {
-        const rl = (0, readline_1.createInterface)({
-            input: process.stdin,
-            output: process.stdout,
-        });
-        rl.question(question, (answer) => {
-            rl.close();
-            resolve(answer.trim());
-        });
-    });
+const commander_1 = require("commander");
+const chalk_1 = __importDefault(require("chalk"));
+const login_1 = require("./commands/login");
+const logout_1 = require("./commands/logout");
+const whoami_1 = require("./commands/whoami");
+const addBlock_1 = require("./commands/addBlock");
+const program = new commander_1.Command();
+program
+    .name('blok0')
+    .description('CLI tool for Payload CMS block management')
+    .version('0.1.0');
+// Add commands
+program.addCommand((0, login_1.createLoginCommand)());
+program.addCommand((0, logout_1.createLogoutCommand)());
+program.addCommand((0, whoami_1.createWhoamiCommand)());
+program.addCommand((0, addBlock_1.createAddBlockCommand)());
+// Global error handling
+program.exitOverride();
+try {
+    program.parse();
 }
-async function main() {
-    const args = process.argv.slice(2);
-    if (args.length < 2 || args[0] !== 'generate' || args[1] !== 'starter') {
-        console.error('Error: Invalid command. Supported: generate starter [folder]');
-        process.exit(1);
+catch (error) {
+    if (error.code === 'commander.help' || error.code === 'commander.version') {
+        // Help/version commands are normal exits
+        process.exit(0);
     }
-    let targetFolder = args[2];
-    if (!targetFolder) {
-        targetFolder = await prompt('Enter project folder name: ');
-    }
-    if (targetFolder !== '.') {
-        (0, fs_1.mkdirSync)(targetFolder, { recursive: true });
-        process.chdir(targetFolder);
-    }
-    if (!(0, detectors_1.checkEmptyDirectory)()) {
-        process.exit(1);
-    }
-    try {
-        await (0, generate_1.generateStarter)();
-    }
-    catch (error) {
-        console.error(`Error: ${error.message}`);
-        process.exit(1);
-    }
+    console.error(chalk_1.default.red('Error:'), error.message);
+    process.exit(1);
 }
-main();

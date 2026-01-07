@@ -1,51 +1,36 @@
-#!/usr/bin/env bun
+#!/usr/bin/env node
 
-import { mkdirSync } from 'fs';
-import { createInterface } from 'readline';
-import { checkEmptyDirectory } from './detectors';
-import { generateStarter } from './handlers/generate';
+import { Command } from 'commander';
+import chalk from 'chalk';
+import { createLoginCommand } from './commands/login';
+import { createLogoutCommand } from './commands/logout';
+import { createWhoamiCommand } from './commands/whoami';
+import { createAddBlockCommand } from './commands/addBlock';
 
-function prompt(question: string): Promise<string> {
-  return new Promise((resolve) => {
-    const rl = createInterface({
-      input: process.stdin,
-      output: process.stdout,
-    });
-    rl.question(question, (answer) => {
-      rl.close();
-      resolve(answer.trim());
-    });
-  });
+const program = new Command();
+
+program
+  .name('blok0')
+  .description('CLI tool for Payload CMS block management')
+  .version('0.1.0');
+
+// Add commands
+program.addCommand(createLoginCommand());
+program.addCommand(createLogoutCommand());
+program.addCommand(createWhoamiCommand());
+program.addCommand(createAddBlockCommand());
+
+// Global error handling
+program.exitOverride();
+
+try {
+  program.parse();
+} catch (error: any) {
+  if (error.code === 'commander.help' || error.code === 'commander.version') {
+    // Help/version commands are normal exits
+    process.exit(0);
+  }
+
+  console.error(chalk.red('Error:'), error.message);
+  process.exit(1);
 }
-
-async function main() {
-  const args = process.argv.slice(2);
-
-  if (args.length < 2 || args[0] !== 'generate' || args[1] !== 'starter') {
-    console.error('Error: Invalid command. Supported: generate starter [folder]');
-    process.exit(1);
-  }
-
-  let targetFolder = args[2];
-  if (!targetFolder) {
-    targetFolder = await prompt('Enter project folder name: ');
-  }
-
-  if (targetFolder !== '.') {
-    mkdirSync(targetFolder, { recursive: true });
-    process.chdir(targetFolder);
-  }
-
-  if (!checkEmptyDirectory()) {
-    process.exit(1);
-  }
-
-  try {
-    await generateStarter();
-  } catch (error) {
-    console.error(`Error: ${(error as Error).message}`);
-    process.exit(1);
-  }
-}
-
-main();

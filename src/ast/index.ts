@@ -7,8 +7,27 @@ export function updatePageCollectionConfig(pagesCollectionPath: string, blockCon
   const project = new Project();
   const sourceFile = project.addSourceFileAtPath(pagesCollectionPath);
 
-  // Find the Pages collection export
-  const pagesExport = sourceFile.getVariableDeclaration('Pages');
+  // Check if block is already imported (do this first before any modifications)
+  const importDeclarations = sourceFile.getImportDeclarations();
+  const existingImport = importDeclarations.find(imp =>
+    imp.getModuleSpecifier().getLiteralValue() === blockConfigPath
+  );
+
+  let needsImport = !existingImport;
+  if (needsImport) {
+    // Add import statement
+    const lastImport = importDeclarations[importDeclarations.length - 1];
+    const importText = `\nimport { ${blockName} } from '${blockConfigPath}';\n`;
+    sourceFile.insertText(lastImport.getEnd(), importText);
+    sourceFile.saveSync(); // Save the import addition
+  }
+
+  // Re-load the source file after modification to get fresh AST
+  const updatedProject = new Project();
+  const updatedSourceFile = updatedProject.addSourceFileAtPath(pagesCollectionPath);
+
+  // Find the Pages collection export (fresh references)
+  const pagesExport = updatedSourceFile.getVariableDeclaration('Pages');
   if (!pagesExport) {
     throw new Error('Could not find Pages collection export');
   }
@@ -82,6 +101,7 @@ export function updatePageCollectionConfig(pagesCollectionPath: string, blockCon
     throw new Error('Could not find fields array in Content tab');
   }
 
+  // Find the layout field
   const layoutField = contentFieldsArray.getElements().find(element => {
     if (Node.isObjectLiteralExpression(element)) {
       const nameProperty = element.getProperty('name');
@@ -108,19 +128,6 @@ export function updatePageCollectionConfig(pagesCollectionPath: string, blockCon
     throw new Error('Could not find blocks array in layout');
   }
 
-  // Check if block is already imported
-  const importDeclarations = sourceFile.getImportDeclarations();
-  const existingImport = importDeclarations.find(imp =>
-    imp.getModuleSpecifier().getLiteralValue() === blockConfigPath
-  );
-
-  if (!existingImport) {
-    // Add import statement
-    const lastImport = importDeclarations[importDeclarations.length - 1];
-    const importText = `import { ${blockName} } from '${blockConfigPath}';\n`;
-    sourceFile.insertText(lastImport.getEnd(), importText);
-  }
-
   // Check if block is already in array
   const existingElements = blocksArray.getElements();
   const alreadyExists = existingElements.some(element => {
@@ -140,13 +147,26 @@ export function updatePageCollectionConfig(pagesCollectionPath: string, blockCon
     }
   }
 
-  sourceFile.saveSync();
+  updatedSourceFile.saveSync();
 }
 
 /**
  * Update RenderBlocks.tsx to include new block component
  */
 export function updateRenderBlocksComponent(componentPath: string, blockSlug: string, blockComponentPath: string): void {
+  // Extract the actual component name from the Component.tsx file
+  const fullComponentPath = require('path').resolve(blockComponentPath.replace('./', 'src/blocks/') + '.tsx');
+  const componentName = extractComponentName(fullComponentPath);
+
+  if (!componentName) {
+    throw new Error(`Could not extract component name from ${fullComponentPath}`);
+  }
+
+  // Convert slug to blockType key (camelCase)
+  const blockTypeKey = blockSlug.split('-').map((word, index) =>
+    index === 0 ? word : word.charAt(0).toUpperCase() + word.slice(1)
+  ).join('');
+
   const project = new Project();
   const sourceFile = project.addSourceFileAtPath(componentPath);
 
@@ -156,28 +176,43 @@ export function updateRenderBlocksComponent(componentPath: string, blockSlug: st
     throw new Error('Could not find blockComponents object in RenderBlocks.tsx');
   }
 
-  // Check if component is already imported
+  // Check if component is already imported (check both default and named imports)
   const importDeclarations = sourceFile.getImportDeclarations();
-  const componentName = blockSlug.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join('');
-
   const existingImport = importDeclarations.find(imp => {
+    // Check default import
+    const defaultImport = imp.getDefaultImport();
+    if (defaultImport && defaultImport.getText() === componentName) {
+      return true;
+    }
+
+    // Check named imports
     const namedImports = imp.getNamedImports();
     return namedImports.some(namedImport => namedImport.getName() === componentName);
   });
 
-  if (!existingImport) {
-    // Add import statement
+  let needsImport = !existingImport;
+  if (needsImport) {
+    // Add import statement (named import)
     const lastImport = importDeclarations[importDeclarations.length - 1];
-    const importText = `import ${componentName} from '${blockComponentPath}';\n`;
+    const importText = `\nimport { ${componentName} } from '${blockComponentPath}';\n`;
     sourceFile.insertText(lastImport.getEnd(), importText);
+    sourceFile.saveSync(); // Save the import addition
+  }
+
+  // Re-load the source file after modification to get fresh AST
+  const updatedProject = new Project();
+  const updatedSourceFile = updatedProject.addSourceFileAtPath(componentPath);
+  const updatedBlockComponents = updatedSourceFile.getVariableDeclaration('blockComponents')?.getInitializer();
+  if (!updatedBlockComponents || !Node.isObjectLiteralExpression(updatedBlockComponents)) {
+    throw new Error('Could not find blockComponents object in RenderBlocks.tsx after reload');
   }
 
   // Check if property already exists
-  const existingProperties = blockComponents.getProperties();
+  const existingProperties = updatedBlockComponents.getProperties();
   const propertyExists = existingProperties.some(prop => {
     if (Node.isPropertyAssignment(prop)) {
       const name = prop.getName();
-      return name === `'${blockSlug}'` || name === `"${blockSlug}"`;
+      return name === `'${blockTypeKey}'` || name === `"${blockTypeKey}"`;
     }
     return false;
   });
@@ -187,16 +222,16 @@ export function updateRenderBlocksComponent(componentPath: string, blockSlug: st
     const lastProperty = existingProperties[existingProperties.length - 1];
     if (lastProperty) {
       const insertPos = lastProperty.getEnd();
-      const newPropertyText = `,\n  '${blockSlug}': ${componentName}`;
-      sourceFile.insertText(insertPos, newPropertyText);
+      const newPropertyText = `,\n  '${blockTypeKey}': ${componentName}`;
+      updatedSourceFile.insertText(insertPos, newPropertyText);
     } else {
       // Object is empty, add first property
-      const objectStart = blockComponents.getStart() + 1; // After opening brace
-      sourceFile.insertText(objectStart, `\n  '${blockSlug}': ${componentName}\n`);
+      const objectStart = updatedBlockComponents.getStart() + 1; // After opening brace
+      updatedSourceFile.insertText(objectStart, `\n  '${blockTypeKey}': ${componentName}\n`);
     }
   }
 
-  sourceFile.saveSync();
+  updatedSourceFile.saveSync();
 }
 
 /**
@@ -279,4 +314,55 @@ export function findPagesCollection(): string | null {
   }
 
   return null;
+}
+
+/**
+ * Extract the component name from a Component.tsx file
+ */
+export function extractComponentName(componentPath: string): string | null {
+  try {
+    const project = new Project();
+    const sourceFile = project.addSourceFileAtPath(componentPath);
+
+    // Look for named exports like "export const ComponentName"
+    const variableDeclarations = sourceFile.getVariableDeclarations();
+    for (const declaration of variableDeclarations) {
+      if (declaration.isExported()) {
+        const name = declaration.getName();
+        // Check if it's a React component (function or const with JSX)
+        const initializer = declaration.getInitializer();
+        if (initializer) {
+          // Look for React.FC or function patterns
+          const type = declaration.getType();
+          const typeText = type.getText();
+          if (typeText.includes('React.FC') || typeText.includes('FC<') ||
+              initializer.getText().includes('React.FC') || initializer.getText().includes('FC<')) {
+            return name;
+          }
+        }
+      }
+    }
+
+    // Look for export default statements
+    const defaultExport = sourceFile.getDefaultExportSymbol();
+    if (defaultExport) {
+      return defaultExport.getName();
+    }
+
+    // Look for export default expressions
+    const exportAssignments = sourceFile.getExportAssignments();
+    for (const assignment of exportAssignments) {
+      if (assignment.isExportEquals() === false) { // export default
+        const expression = assignment.getExpression();
+        if (expression) {
+          return expression.getText();
+        }
+      }
+    }
+
+    return null;
+  } catch (error) {
+    console.error('Error extracting component name:', error);
+    return null;
+  }
 }

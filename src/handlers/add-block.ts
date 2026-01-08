@@ -92,7 +92,7 @@ export async function handleAddBlock(blockUrl: string, options: { force?: boolea
     if (pagesCollectionPath) {
       console.log('🔧 Updating Pages collection...');
       const blockIdentifier = slugToIdentifier(metadata.slug);
-      const relativeConfigPath = `./src/blocks/${metadata.slug}/config`;
+      const relativeConfigPath = `@/blocks/${metadata.slug}/config`;
 
       updatePageCollectionConfig(pagesCollectionPath, relativeConfigPath, blockIdentifier);
       console.log(`✅ Added ${blockIdentifier} to Pages collection`);

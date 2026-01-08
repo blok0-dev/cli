@@ -105,7 +105,7 @@ async function handleAddBlock(blockUrl, options = {}) {
         if (pagesCollectionPath) {
             console.log('🔧 Updating Pages collection...');
             const blockIdentifier = (0, blocks_1.slugToIdentifier)(metadata.slug);
-            const relativeConfigPath = `./src/blocks/${metadata.slug}/config`;
+            const relativeConfigPath = `@/blocks/${metadata.slug}/config`;
             (0, ast_1.updatePageCollectionConfig)(pagesCollectionPath, relativeConfigPath, blockIdentifier);
             console.log(`✅ Added ${blockIdentifier} to Pages collection`);
         }

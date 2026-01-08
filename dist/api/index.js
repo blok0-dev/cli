@@ -9,7 +9,7 @@ const auth_1 = require("../auth");
 class APIClient {
     client;
     baseURL;
-    constructor(baseURL = 'http://localhost:3000') {
+    constructor(baseURL = 'https://www.blok0.xyz') {
         this.baseURL = baseURL;
         this.client = axios_1.default.create({
             baseURL,
@@ -23,6 +23,11 @@ class APIClient {
             const authHeader = await (0, auth_1.getAuthHeader)();
             if (authHeader) {
                 config.headers.Authorization = authHeader;
+                console.log(`🔐 API Request: ${config.method?.toUpperCase()} ${config.url}`);
+                console.log(`🔑 Authorization: ${authHeader}`);
+            }
+            else {
+                console.log(`🚫 API Request: ${config.method?.toUpperCase()} ${config.url} (No auth)`);
             }
             return config;
         });

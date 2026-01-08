@@ -1,7 +1,7 @@
 /**
  * Handle login command
  */
-export declare function handleLogin(token?: string): Promise<void>;
+export declare function handleLogin(token?: string, manual?: boolean): Promise<void>;
 /**
  * Handle logout command
  */

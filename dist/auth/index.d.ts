@@ -3,6 +3,16 @@ export interface AuthConfig {
     refreshToken?: string;
     tokenExpiry?: number;
 }
+export interface AuthCallback {
+    token: string;
+    expires_in?: number;
+    refresh_token?: string;
+}
+export interface AuthServerOptions {
+    port?: number;
+    timeout?: number;
+    state?: string;
+}
 export interface TokenResponse {
     access_token: string;
     refresh_token?: string;

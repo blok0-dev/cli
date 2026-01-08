@@ -29,8 +29,9 @@ USAGE:
   blok0 <command> [subcommand] [options]
 
 COMMANDS:
-  login                    Authenticate with remote API
+  login                    Authenticate via browser or token
   logout                   Remove stored credentials
+  debug                    Show authentication debug info
   generate starter [folder] Generate PayloadCMS starter project
   add block <url>          Add a block from remote API
   update block <id>        Update existing block (future)
@@ -81,11 +82,15 @@ async function main() {
         break;
 
       case 'login':
-        // Check for --token flag
+        // Check for flags
         const tokenIndex = restArgs.indexOf('--token');
+        const manualIndex = restArgs.indexOf('--manual');
+
         if (tokenIndex !== -1 && tokenIndex + 1 < restArgs.length) {
           const token = restArgs[tokenIndex + 1];
           await handleLogin(token);
+        } else if (manualIndex !== -1) {
+          await handleLogin(undefined, true);
         } else {
           await handleLogin();
         }
@@ -93,6 +98,10 @@ async function main() {
 
       case 'logout':
         await handleLogout();
+        break;
+
+      case 'debug':
+        await handleDebug();
         break;
 
       case 'add':
@@ -155,6 +164,49 @@ async function handleGenerateStarter(args: string[]) {
   } catch (error) {
     console.warn('⚠️  Failed to initialize registry:', (error as Error).message);
   }
+}
+
+async function handleDebug() {
+  console.log('🔍 Blok0 CLI Debug Information');
+  console.log('==============================');
+  console.log('');
+
+  // Check stored token
+  const { getAccessToken, isAuthenticated } = await import('./auth');
+  const token = await getAccessToken();
+  const isAuth = await isAuthenticated();
+
+  console.log('🔐 Authentication Status:');
+  console.log(`  Authenticated: ${isAuth ? '✅ Yes' : '❌ No'}`);
+  console.log(`  Token Stored: ${token ? '✅ Yes' : '❌ No'}`);
+
+  if (token) {
+    console.log(`  Token Preview: ${token.substring(0, 20)}...`);
+    console.log(`  Authorization Header: Bearer ${token}`);
+  }
+
+  console.log('');
+  console.log('🌐 API Configuration:');
+  console.log('  Base URL: https://www.blok0.xyz');
+  console.log('  User Agent: blok0-cli/1.0.0');
+
+  console.log('');
+  console.log('🧪 Test API Connection:');
+
+  // Test API connection
+  const { apiClient } = await import('./api');
+  try {
+    const connectionTest = await apiClient.testConnection();
+    console.log(`  Connection Test: ${connectionTest ? '✅ Passed' : '❌ Failed'}`);
+  } catch (error) {
+    console.log(`  Connection Test: ❌ Failed - ${(error as Error).message}`);
+  }
+
+  console.log('');
+  console.log('💡 Next Steps:');
+  console.log('  1. If no token, run: blok0 login');
+  console.log('  2. Test API with: blok0 add block <url>');
+  console.log('  3. Check server logs for detailed request info');
 }
 
 main();

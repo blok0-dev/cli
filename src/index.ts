@@ -123,7 +123,7 @@ async function main() {
       case 'add':
         const [addSubcommand, ...addRestArgs] = restArgs;
         if (addSubcommand === 'block') {
-          const blockUrl = `https://www.blok0.com/api/cli/sections/${addRestArgs[0]}`;
+          const blockUrl = `https://www.blok0.xyz/api/cli/sections/${addRestArgs[0]}`;
           if (!blockUrl) {
             console.error('Error: Block Slug is required. Use: blok0 add block <slug>');
             process.exit(1);

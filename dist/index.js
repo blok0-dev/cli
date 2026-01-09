@@ -1,5 +1,38 @@
 #!/usr/bin/env node
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 Object.defineProperty(exports, "__esModule", { value: true });
 const fs_1 = require("fs");
 const readline_1 = require("readline");
@@ -28,8 +61,9 @@ USAGE:
   blok0 <command> [subcommand] [options]
 
 COMMANDS:
-  login                    Authenticate with remote API
+  login                    Authenticate via browser or token
   logout                   Remove stored credentials
+  debug                    Show authentication debug info
   generate starter [folder] Generate PayloadCMS starter project
   add block <url>          Add a block from remote API
   update block <id>        Update existing block (future)
@@ -75,11 +109,15 @@ async function main() {
                 }
                 break;
             case 'login':
-                // Check for --token flag
+                // Check for flags
                 const tokenIndex = restArgs.indexOf('--token');
+                const manualIndex = restArgs.indexOf('--manual');
                 if (tokenIndex !== -1 && tokenIndex + 1 < restArgs.length) {
                     const token = restArgs[tokenIndex + 1];
                     await (0, login_1.handleLogin)(token);
+                }
+                else if (manualIndex !== -1) {
+                    await (0, login_1.handleLogin)(undefined, true);
                 }
                 else {
                     await (0, login_1.handleLogin)();
@@ -87,6 +125,9 @@ async function main() {
                 break;
             case 'logout':
                 await (0, login_1.handleLogout)();
+                break;
+            case 'debug':
+                await handleDebug();
                 break;
             case 'add':
                 const [addSubcommand, ...addRestArgs] = restArgs;
@@ -144,5 +185,41 @@ async function handleGenerateStarter(args) {
     catch (error) {
         console.warn('⚠️  Failed to initialize registry:', error.message);
     }
+}
+async function handleDebug() {
+    console.log('🔍 Blok0 CLI Debug Information');
+    console.log('==============================');
+    console.log('');
+    // Check stored token
+    const { getAccessToken, isAuthenticated } = await Promise.resolve().then(() => __importStar(require('./auth')));
+    const token = await getAccessToken();
+    const isAuth = await isAuthenticated();
+    console.log('🔐 Authentication Status:');
+    console.log(`  Authenticated: ${isAuth ? '✅ Yes' : '❌ No'}`);
+    console.log(`  Token Stored: ${token ? '✅ Yes' : '❌ No'}`);
+    if (token) {
+        console.log(`  Token Preview: ${token.substring(0, 20)}...`);
+        console.log(`  Authorization Header: Bearer ${token}`);
+    }
+    console.log('');
+    console.log('🌐 API Configuration:');
+    console.log('  Base URL: https://www.blok0.xyz');
+    console.log('  User Agent: blok0-cli/1.0.0');
+    console.log('');
+    console.log('🧪 Test API Connection:');
+    // Test API connection
+    const { apiClient } = await Promise.resolve().then(() => __importStar(require('./api')));
+    try {
+        const connectionTest = await apiClient.testConnection();
+        console.log(`  Connection Test: ${connectionTest ? '✅ Passed' : '❌ Failed'}`);
+    }
+    catch (error) {
+        console.log(`  Connection Test: ❌ Failed - ${error.message}`);
+    }
+    console.log('');
+    console.log('💡 Next Steps:');
+    console.log('  1. If no token, run: blok0 login');
+    console.log('  2. Test API with: blok0 add block <url>');
+    console.log('  3. Check server logs for detailed request info');
 }
 main();

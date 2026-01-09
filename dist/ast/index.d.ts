@@ -25,3 +25,7 @@ export declare function findRenderBlocksComponent(): string | null;
  * Find Pages collection file in project
  */
 export declare function findPagesCollection(): string | null;
+/**
+ * Extract the component name from a Component.tsx file
+ */
+export declare function extractComponentName(componentPath: string): string | null;

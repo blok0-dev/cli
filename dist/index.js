@@ -41,6 +41,7 @@ const generate_1 = require("./handlers/generate");
 const login_1 = require("./handlers/login");
 const add_block_1 = require("./handlers/add-block");
 const registry_1 = require("./registry");
+const ui_1 = require("./ui");
 function prompt(question) {
     return new Promise((resolve) => {
         const rl = (0, readline_1.createInterface)({
@@ -75,6 +76,9 @@ OPTIONS:
   --version, -v            Show version information
   --verbose                Enable verbose logging
   --dry-run                Preview changes without applying them
+  --no-animation           Disable animations and spinners
+  --no-emoji               Disable emoji in output
+  --ci                     Optimize for CI environments (implies --no-animation and --no-emoji)
 
 EXAMPLES:
   blok0 login
@@ -86,16 +90,23 @@ For more information, visit: https://github.com/blok0-payload/cli
 }
 async function main() {
     const args = process.argv.slice(2);
-    if (args.length === 0 || args.includes('--help') || args.includes('-h')) {
+    // Parse global UI flags
+    const noAnimation = args.includes('--no-animation');
+    const noEmoji = args.includes('--no-emoji');
+    const ciMode = args.includes('--ci');
+    (0, ui_1.setUIFlags)({ noAnimation, noEmoji, ci: ciMode });
+    // Filter out global flags from args
+    const filteredArgs = args.filter(arg => !['--no-animation', '--no-emoji', '--ci'].includes(arg));
+    if (filteredArgs.length === 0 || filteredArgs.includes('--help') || filteredArgs.includes('-h')) {
         showHelp();
         process.exit(0);
     }
-    if (args.includes('--version') || args.includes('-v')) {
+    if (filteredArgs.includes('--version') || filteredArgs.includes('-v')) {
         const pkg = require('../package.json');
         console.log(`blok0 v${pkg.version}`);
         process.exit(0);
     }
-    const [command, ...restArgs] = args;
+    const [command, ...restArgs] = filteredArgs;
     try {
         switch (command) {
             case 'generate':
@@ -144,7 +155,7 @@ async function main() {
                     await (0, add_block_1.handleAddBlock)(blockUrl, options);
                 }
                 else {
-                    console.error('Error: Invalid subcommand. Use: blok0 add block <url>');
+                    console.error('Error: Invalid subcommand. Use: blok0 add block <slug>');
                     process.exit(1);
                 }
                 break;
@@ -187,37 +198,33 @@ async function handleGenerateStarter(args) {
     }
 }
 async function handleDebug() {
-    console.log('🔍 Blok0 CLI Debug Information');
-    console.log('==============================');
-    console.log('');
+    const { showSection, log, withSpinner, EMOJIS } = await Promise.resolve().then(() => __importStar(require('./ui')));
+    showSection('🔍 Blok0 CLI Debug Information', EMOJIS.SEARCH);
     // Check stored token
     const { getAccessToken, isAuthenticated } = await Promise.resolve().then(() => __importStar(require('./auth')));
     const token = await getAccessToken();
     const isAuth = await isAuthenticated();
-    console.log('🔐 Authentication Status:');
+    log.header('🔐 Authentication Status:');
     console.log(`  Authenticated: ${isAuth ? '✅ Yes' : '❌ No'}`);
     console.log(`  Token Stored: ${token ? '✅ Yes' : '❌ No'}`);
     if (token) {
         console.log(`  Token Preview: ${token.substring(0, 20)}...`);
         console.log(`  Authorization Header: Bearer ${token}`);
     }
-    console.log('');
-    console.log('🌐 API Configuration:');
+    log.header('🌐 API Configuration:');
     console.log('  Base URL: https://www.blok0.xyz');
     console.log('  User Agent: blok0-cli/1.0.0');
-    console.log('');
-    console.log('🧪 Test API Connection:');
+    log.header('🧪 Test API Connection:');
     // Test API connection
     const { apiClient } = await Promise.resolve().then(() => __importStar(require('./api')));
     try {
-        const connectionTest = await apiClient.testConnection();
+        const connectionTest = await withSpinner('Testing API connection', () => apiClient.testConnection());
         console.log(`  Connection Test: ${connectionTest ? '✅ Passed' : '❌ Failed'}`);
     }
     catch (error) {
         console.log(`  Connection Test: ❌ Failed - ${error.message}`);
     }
-    console.log('');
-    console.log('💡 Next Steps:');
+    log.header('💡 Next Steps:');
     console.log('  1. If no token, run: blok0 login');
     console.log('  2. Test API with: blok0 add block <url>');
     console.log('  3. Check server logs for detailed request info');

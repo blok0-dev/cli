@@ -1,6 +1,7 @@
 import { isAuthenticated, clearCredentials, storeAccessToken, AuthCallback } from '../auth';
 import { AuthServer } from '../auth/server';
 import open from 'open';
+import { withSpinner, log, showSection, EMOJIS } from '../ui';
 
 // Add SIGINT handler for graceful cleanup
 process.on('SIGINT', () => {
@@ -15,13 +16,15 @@ export async function handleLogin(token?: string, manual?: boolean): Promise<voi
   // Direct token authentication (CI/CD)
   if (token) {
     try {
-      console.log('🔐 Saving authentication token...');
-      await storeAccessToken(token);
-      console.log('✅ Successfully authenticated!');
+      await withSpinner(
+        'Saving authentication token',
+        () => storeAccessToken(token),
+        { emoji: EMOJIS.LOCK, successText: 'Successfully authenticated!' }
+      );
       console.log('');
-      console.log('You can now use blok0 commands that require authentication.');
+      log.info('You can now use blok0 commands that require authentication.');
     } catch (error) {
-      console.error('❌ Failed to save authentication token:', (error as Error).message);
+      log.error('Failed to save authentication token: ' + (error as Error).message);
       process.exit(1);
     }
     return;
@@ -49,36 +52,40 @@ export async function handleLogin(token?: string, manual?: boolean): Promise<voi
  * Handle browser-based authentication flow
  */
 async function handleBrowserLogin(): Promise<void> {
-  console.log('🔐 Blok0 Authentication');
-  console.log('======================');
-  console.log('');
+  showSection('🔐 Blok0 Authentication', EMOJIS.LOCK);
 
   // Create authentication server
   const authServer = new AuthServer();
 
   try {
     // Initialize server (find available port)
-    console.log('🚀 Starting authentication server...');
-    await authServer.initialize();
+    await withSpinner(
+      'Starting authentication server',
+      () => authServer.initialize(),
+      { emoji: EMOJIS.ROCKET }
+    );
 
     // Get the authorization URL (now port is available)
     const authUrl = authServer.getAuthorizationUrl();
 
-    console.log('🌐 Opening browser for authentication...');
+    log.info('Opening browser for authentication...');
     await open(authUrl);
 
-    console.log('📱 Please complete authentication in your browser.');
-    console.log('⏳ Waiting for authentication to complete...');
+    log.info('Please complete authentication in your browser.');
+    log.plain('⏳ Waiting for authentication to complete...');
 
     // Start server and wait for callback
     const authCallback: AuthCallback = await authServer.start();
 
     // Store the token
-    console.log('🔐 Saving authentication token...');
-    await storeAccessToken(authCallback.token);
-    console.log('✅ Successfully authenticated!');
+    await withSpinner(
+      'Saving authentication token',
+      () => storeAccessToken(authCallback.token),
+      { emoji: EMOJIS.LOCK, successText: 'Successfully authenticated!' }
+    );
+
     console.log('');
-    console.log('You can now use blok0 commands that require authentication.');
+    log.info('You can now use blok0 commands that require authentication.');
 
   } catch (error) {
     authServer.stop();
@@ -90,23 +97,21 @@ async function handleBrowserLogin(): Promise<void> {
  * Show manual authentication instructions
  */
 function showManualInstructions(): void {
-  console.log('🔐 Blok0 Manual Authentication');
-  console.log('==============================');
-  console.log('');
+  showSection('🔐 Blok0 Manual Authentication', EMOJIS.LOCK);
   console.log('To authenticate with the Blok0 API, make a POST request to:');
   console.log('https://www.blok0.xyz/api/customers/login');
   console.log('');
-  console.log('Example using curl:');
+  log.info('Example using curl:');
   console.log('curl -X POST https://www.blok0.xyz/api/customers/login \\');
   console.log('  -H "Content-Type: application/json" \\');
   console.log('  -d \'{"email": "your-email@example.com", "password": "your-password"}\'');
   console.log('');
-  console.log('Then copy the access token and run:');
+  log.info('Then copy the access token and run:');
   console.log('blok0 login --token <your-token>');
   console.log('');
-  console.log('For CI/CD environments, set the BLOK0_TOKEN environment variable.');
+  log.info('For CI/CD environments, set the BLOK0_TOKEN environment variable.');
   console.log('');
-  console.log('💡 For browser-based login, run: blok0 login');
+  log.info('For browser-based login, run: blok0 login');
 }
 
 /**
@@ -114,17 +119,23 @@ function showManualInstructions(): void {
  */
 export async function handleLogout(): Promise<void> {
   try {
-    const wasAuthenticated = await isAuthenticated();
+    const wasAuthenticated = await withSpinner(
+      'Checking authentication status',
+      () => isAuthenticated()
+    );
 
     if (!wasAuthenticated) {
-      console.log('You are not currently logged in.');
+      log.warning('You are not currently logged in.');
       return;
     }
 
-    await clearCredentials();
-    console.log('✅ Successfully logged out and cleared stored credentials.');
+    await withSpinner(
+      'Clearing stored credentials',
+      () => clearCredentials(),
+      { emoji: EMOJIS.LOCK, successText: 'Successfully logged out and cleared stored credentials.' }
+    );
   } catch (error) {
-    console.error('❌ Failed to logout:', (error as Error).message);
+    log.error('Failed to logout: ' + (error as Error).message);
     process.exit(1);
   }
 }

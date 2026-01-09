@@ -8,6 +8,7 @@ exports.handleLogout = handleLogout;
 const auth_1 = require("../auth");
 const server_1 = require("../auth/server");
 const open_1 = __importDefault(require("open"));
+const ui_1 = require("../ui");
 // Add SIGINT handler for graceful cleanup
 process.on('SIGINT', () => {
     console.log('\n\n⚠️  Authentication cancelled by user.');
@@ -20,14 +21,12 @@ async function handleLogin(token, manual) {
     // Direct token authentication (CI/CD)
     if (token) {
         try {
-            console.log('🔐 Saving authentication token...');
-            await (0, auth_1.storeAccessToken)(token);
-            console.log('✅ Successfully authenticated!');
+            await (0, ui_1.withSpinner)('Saving authentication token', () => (0, auth_1.storeAccessToken)(token), { emoji: ui_1.EMOJIS.LOCK, successText: 'Successfully authenticated!' });
             console.log('');
-            console.log('You can now use blok0 commands that require authentication.');
+            ui_1.log.info('You can now use blok0 commands that require authentication.');
         }
         catch (error) {
-            console.error('❌ Failed to save authentication token:', error.message);
+            ui_1.log.error('Failed to save authentication token: ' + error.message);
             process.exit(1);
         }
         return;
@@ -53,29 +52,24 @@ async function handleLogin(token, manual) {
  * Handle browser-based authentication flow
  */
 async function handleBrowserLogin() {
-    console.log('🔐 Blok0 Authentication');
-    console.log('======================');
-    console.log('');
+    (0, ui_1.showSection)('🔐 Blok0 Authentication', ui_1.EMOJIS.LOCK);
     // Create authentication server
     const authServer = new server_1.AuthServer();
     try {
         // Initialize server (find available port)
-        console.log('🚀 Starting authentication server...');
-        await authServer.initialize();
+        await (0, ui_1.withSpinner)('Starting authentication server', () => authServer.initialize(), { emoji: ui_1.EMOJIS.ROCKET });
         // Get the authorization URL (now port is available)
         const authUrl = authServer.getAuthorizationUrl();
-        console.log('🌐 Opening browser for authentication...');
+        ui_1.log.info('Opening browser for authentication...');
         await (0, open_1.default)(authUrl);
-        console.log('📱 Please complete authentication in your browser.');
-        console.log('⏳ Waiting for authentication to complete...');
+        ui_1.log.info('Please complete authentication in your browser.');
+        ui_1.log.plain('⏳ Waiting for authentication to complete...');
         // Start server and wait for callback
         const authCallback = await authServer.start();
         // Store the token
-        console.log('🔐 Saving authentication token...');
-        await (0, auth_1.storeAccessToken)(authCallback.token);
-        console.log('✅ Successfully authenticated!');
+        await (0, ui_1.withSpinner)('Saving authentication token', () => (0, auth_1.storeAccessToken)(authCallback.token), { emoji: ui_1.EMOJIS.LOCK, successText: 'Successfully authenticated!' });
         console.log('');
-        console.log('You can now use blok0 commands that require authentication.');
+        ui_1.log.info('You can now use blok0 commands that require authentication.');
     }
     catch (error) {
         authServer.stop();
@@ -86,39 +80,36 @@ async function handleBrowserLogin() {
  * Show manual authentication instructions
  */
 function showManualInstructions() {
-    console.log('🔐 Blok0 Manual Authentication');
-    console.log('==============================');
-    console.log('');
+    (0, ui_1.showSection)('🔐 Blok0 Manual Authentication', ui_1.EMOJIS.LOCK);
     console.log('To authenticate with the Blok0 API, make a POST request to:');
     console.log('https://www.blok0.xyz/api/customers/login');
     console.log('');
-    console.log('Example using curl:');
+    ui_1.log.info('Example using curl:');
     console.log('curl -X POST https://www.blok0.xyz/api/customers/login \\');
     console.log('  -H "Content-Type: application/json" \\');
     console.log('  -d \'{"email": "your-email@example.com", "password": "your-password"}\'');
     console.log('');
-    console.log('Then copy the access token and run:');
+    ui_1.log.info('Then copy the access token and run:');
     console.log('blok0 login --token <your-token>');
     console.log('');
-    console.log('For CI/CD environments, set the BLOK0_TOKEN environment variable.');
+    ui_1.log.info('For CI/CD environments, set the BLOK0_TOKEN environment variable.');
     console.log('');
-    console.log('💡 For browser-based login, run: blok0 login');
+    ui_1.log.info('For browser-based login, run: blok0 login');
 }
 /**
  * Handle logout command
  */
 async function handleLogout() {
     try {
-        const wasAuthenticated = await (0, auth_1.isAuthenticated)();
+        const wasAuthenticated = await (0, ui_1.withSpinner)('Checking authentication status', () => (0, auth_1.isAuthenticated)());
         if (!wasAuthenticated) {
-            console.log('You are not currently logged in.');
+            ui_1.log.warning('You are not currently logged in.');
             return;
         }
-        await (0, auth_1.clearCredentials)();
-        console.log('✅ Successfully logged out and cleared stored credentials.');
+        await (0, ui_1.withSpinner)('Clearing stored credentials', () => (0, auth_1.clearCredentials)(), { emoji: ui_1.EMOJIS.LOCK, successText: 'Successfully logged out and cleared stored credentials.' });
     }
     catch (error) {
-        console.error('❌ Failed to logout:', error.message);
+        ui_1.log.error('Failed to logout: ' + error.message);
         process.exit(1);
     }
 }

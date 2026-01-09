@@ -40,35 +40,32 @@ const api_1 = require("../api");
 const registry_1 = require("../registry");
 const blocks_1 = require("../blocks");
 const ast_1 = require("../ast");
+const ui_1 = require("../ui");
 /**
  * Handle add block command
  */
 async function handleAddBlock(blockUrl, options = {}) {
-    console.log('📦 Adding Blok0 Block');
-    console.log('====================');
-    console.log('');
+    (0, ui_1.showSection)('📦 Adding Blok0 Block', ui_1.EMOJIS.PACKAGE);
     try {
         // Step 1: Authentication check
-        console.log('🔐 Checking authentication...');
-        const authenticated = await (0, auth_1.isAuthenticated)();
+        const authenticated = await (0, ui_1.withSpinner)('Checking authentication', () => (0, auth_1.isAuthenticated)(), { emoji: ui_1.EMOJIS.LOCK });
         if (!authenticated) {
-            console.error('❌ You are not logged in. Please run `blok0 login` first.');
+            ui_1.log.error('You are not logged in. Please run `blok0 login` first.');
             process.exit(1);
         }
         // Step 2: Fetch block data from API
-        console.log(`📡 Fetching block from: ${blockUrl}`);
-        const { metadata, files } = await api_1.apiClient.fetchBlockData(blockUrl);
-        console.log(`✅ Found block: "${metadata.name}" (${metadata.slug})`);
+        const { metadata, files } = await (0, ui_1.withSpinner)(`Fetching block from ${blockUrl}`, () => api_1.apiClient.fetchBlockData(blockUrl), { emoji: ui_1.EMOJIS.SEARCH });
+        ui_1.log.success(`Found block: "${metadata.name}" (${metadata.slug})`);
         // Step 3: Check if block is already registered
         if ((0, registry_1.isBlockRegistered)(metadata.slug)) {
             if (!options.force) {
-                console.error(`❌ Block "${metadata.slug}" is already installed. Use --force to reinstall.`);
+                ui_1.log.error(`Block "${metadata.slug}" is already installed. Use --force to reinstall.`);
                 process.exit(1);
             }
-            console.log('⚠️  Block already exists, reinstalling...');
+            ui_1.log.warning('Block already exists, reinstalling...');
         }
         if (options.dryRun) {
-            console.log('🔍 Dry run mode - would perform the following actions:');
+            ui_1.log.info('Dry run mode - would perform the following actions:');
             console.log(`  - Create directory: src/blocks/${metadata.slug}`);
             console.log(`  - Download ${files.length} files`);
             console.log('  - Update Payload config');
@@ -79,13 +76,12 @@ async function handleAddBlock(blockUrl, options = {}) {
         // Step 4: Ensure blocks directory exists
         const blocksDir = (0, blocks_1.ensureBlocksDirectory)();
         // Step 5: Create block directory and files
-        console.log('📁 Creating block directory and files...');
         const { dir, configPath, componentPath } = (0, blocks_1.createBlockDirectory)(blocksDir, metadata.slug, files);
-        console.log(`✅ Created block directory: ${path.relative(process.cwd(), dir)}`);
+        ui_1.log.success(`Created block directory: ${path.relative(process.cwd(), dir)}`);
         // Step 6: Validate created block
         const validation = (0, blocks_1.validateBlockDirectory)(dir);
         if (!validation.valid) {
-            console.error('❌ Block validation failed:');
+            ui_1.log.error('Block validation failed:');
             validation.errors.forEach(error => console.error(`  - ${error}`));
             // Cleanup on failure
             require('fs').rmSync(dir, { recursive: true, force: true });
@@ -103,37 +99,34 @@ async function handleAddBlock(blockUrl, options = {}) {
         // Step 9: Update Pages collection (AST manipulation)
         const pagesCollectionPath = (0, ast_1.findPagesCollection)();
         if (pagesCollectionPath) {
-            console.log('🔧 Updating Pages collection...');
-            const blockIdentifier = (0, blocks_1.slugToIdentifier)(metadata.slug);
-            const relativeConfigPath = `@/blocks/${metadata.slug}/config`;
-            (0, ast_1.updatePageCollectionConfig)(pagesCollectionPath, relativeConfigPath, blockIdentifier);
-            console.log(`✅ Added ${blockIdentifier} to Pages collection`);
+            await (0, ui_1.withSpinner)('Updating Pages collection', async () => {
+                const blockIdentifier = (0, blocks_1.slugToIdentifier)(metadata.slug);
+                const relativeConfigPath = `@/blocks/${metadata.slug}/config`;
+                (0, ast_1.updatePageCollectionConfig)(pagesCollectionPath, relativeConfigPath, blockIdentifier);
+            }, { emoji: ui_1.EMOJIS.GEAR, successText: `Added ${(0, blocks_1.slugToIdentifier)(metadata.slug)} to Pages collection` });
         }
         else {
-            console.warn('⚠️  Could not find Pages collection file. You may need to manually add the block to your collections.');
+            ui_1.log.warning('Could not find Pages collection file. You may need to manually add the block to your collections.');
         }
         // Step 10: Update RenderBlocks component (AST manipulation)
         const renderBlocksPath = (0, ast_1.findRenderBlocksComponent)();
         if (renderBlocksPath) {
-            console.log('🔧 Updating RenderBlocks component...');
-            const relativeComponentPath = `./${metadata.slug}/Component`;
-            (0, ast_1.updateRenderBlocksComponent)(renderBlocksPath, metadata.slug, relativeComponentPath);
-            console.log(`✅ Added ${metadata.slug} component to RenderBlocks`);
+            await (0, ui_1.withSpinner)('Updating RenderBlocks component', async () => {
+                const relativeComponentPath = `./${metadata.slug}/Component`;
+                (0, ast_1.updateRenderBlocksComponent)(renderBlocksPath, metadata.slug, relativeComponentPath);
+            }, { emoji: ui_1.EMOJIS.GEAR, successText: `Added ${metadata.slug} component to RenderBlocks` });
         }
         else {
-            console.warn('⚠️  Could not find RenderBlocks component. You may need to manually add the block component.');
+            ui_1.log.warning('Could not find RenderBlocks component. You may need to manually add the block component.');
         }
         // Step 11: Register block in registry
-        console.log('📝 Registering block...');
-        (0, registry_1.addBlockToRegistry)(blockEntry);
-        console.log('✅ Block registered successfully');
-        console.log('');
-        console.log('🎉 Block installation complete!');
-        console.log('');
-        console.log('Next steps:');
-        console.log('1. Review the installed files in src/blocks/' + metadata.slug);
-        console.log('2. Test your application to ensure the block works correctly');
-        console.log('3. Commit the changes to your repository');
+        await (0, ui_1.withSpinner)('Registering block', async () => (0, registry_1.addBlockToRegistry)(blockEntry), { emoji: ui_1.EMOJIS.CHECK, successText: 'Block registered successfully' });
+        ui_1.log.success('Block installation complete!');
+        (0, ui_1.showNextSteps)([
+            `Review the installed files in src/blocks/${metadata.slug}`,
+            'Test your application to ensure the block works correctly',
+            'Commit the changes to your repository'
+        ]);
     }
     catch (error) {
         console.error('❌ Failed to add block:', error.message);

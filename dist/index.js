@@ -45,7 +45,7 @@ OPTIONS:
 EXAMPLES:
   blok0 login
   blok0 generate starter my-project
-  blok0 add block https://api.example.com/blocks/123
+  blok0 add block https://www.blok0.com/api/cli/sections/123
 
 For more information, visit: https://github.com/blok0-payload/cli
 `);
@@ -91,9 +91,9 @@ async function main() {
             case 'add':
                 const [addSubcommand, ...addRestArgs] = restArgs;
                 if (addSubcommand === 'block') {
-                    const blockUrl = addRestArgs[0];
+                    const blockUrl = `https://www.blok0.com/api/cli/sections/${addRestArgs[0]}`;
                     if (!blockUrl) {
-                        console.error('Error: Block URL is required. Use: blok0 add block <url>');
+                        console.error('Error: Block Slug is required. Use: blok0 add block <slug>');
                         process.exit(1);
                     }
                     const options = {

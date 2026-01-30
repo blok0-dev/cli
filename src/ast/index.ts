@@ -162,10 +162,8 @@ export function updateRenderBlocksComponent(componentPath: string, blockSlug: st
     throw new Error(`Could not extract component name from ${fullComponentPath}`);
   }
 
-  // Convert slug to blockType key (camelCase)
-  const blockTypeKey = blockSlug.split('-').map((word, index) =>
-    index === 0 ? word : word.charAt(0).toUpperCase() + word.slice(1)
-  ).join('');
+  // Use slug directly as blockType key (quoted)
+  const blockTypeKey = blockSlug;
 
   const project = new Project();
   const sourceFile = project.addSourceFileAtPath(componentPath);
@@ -336,7 +334,7 @@ export function extractComponentName(componentPath: string): string | null {
           const type = declaration.getType();
           const typeText = type.getText();
           if (typeText.includes('React.FC') || typeText.includes('FC<') ||
-              initializer.getText().includes('React.FC') || initializer.getText().includes('FC<')) {
+            initializer.getText().includes('React.FC') || initializer.getText().includes('FC<')) {
             return name;
           }
         }
@@ -365,4 +363,163 @@ export function extractComponentName(componentPath: string): string | null {
     console.error('Error extracting component name:', error);
     return null;
   }
+}
+
+/**
+ * Remove block from Pages collection config
+ */
+export function removePageCollectionConfig(pagesCollectionPath: string, blockName: string): void {
+  const project = new Project();
+  const sourceFile = project.addSourceFileAtPath(pagesCollectionPath);
+
+  // 1. Remove from blocks array
+  const pagesExport = sourceFile.getVariableDeclaration('Pages');
+  if (pagesExport) {
+    const pagesObject = pagesExport.getInitializer();
+    if (pagesObject && Node.isObjectLiteralExpression(pagesObject)) {
+      const fieldsProperty = pagesObject.getProperty('fields');
+      if (fieldsProperty && Node.isPropertyAssignment(fieldsProperty)) {
+        const fieldsArray = fieldsProperty.getInitializer();
+        if (fieldsArray && Node.isArrayLiteralExpression(fieldsArray)) {
+          // Find tabs
+          const tabsField = fieldsArray.getElements().find(element => {
+            if (Node.isObjectLiteralExpression(element)) {
+              const typeProperty = element.getProperty('type');
+              if (Node.isPropertyAssignment(typeProperty)) {
+                const initializer = typeProperty.getInitializer();
+                return Node.isStringLiteral(initializer) && initializer.getLiteralValue() === 'tabs';
+              }
+            }
+            return false;
+          });
+
+          if (tabsField && Node.isObjectLiteralExpression(tabsField)) {
+            const tabsProperty = tabsField.getProperty('tabs');
+            if (tabsProperty && Node.isPropertyAssignment(tabsProperty)) {
+              const tabsArray = tabsProperty.getInitializer();
+              if (tabsArray && Node.isArrayLiteralExpression(tabsArray)) {
+                // Find content tab
+                const contentTab = tabsArray.getElements().find(element => {
+                  if (Node.isObjectLiteralExpression(element)) {
+                    const labelProperty = element.getProperty('label');
+                    if (Node.isPropertyAssignment(labelProperty)) {
+                      const initializer = labelProperty.getInitializer();
+                      return Node.isStringLiteral(initializer) && initializer.getLiteralValue() === 'Content';
+                    }
+                  }
+                  return false;
+                });
+
+                if (contentTab && Node.isObjectLiteralExpression(contentTab)) {
+                  const contentFields = contentTab.getProperty('fields');
+                  if (contentFields && Node.isPropertyAssignment(contentFields)) {
+                    const contentFieldsArray = contentFields.getInitializer();
+                    if (contentFieldsArray && Node.isArrayLiteralExpression(contentFieldsArray)) {
+                      // Find layout field
+                      const layoutField = contentFieldsArray.getElements().find(element => {
+                        if (Node.isObjectLiteralExpression(element)) {
+                          const nameProperty = element.getProperty('name');
+                          if (Node.isPropertyAssignment(nameProperty)) {
+                            const initializer = nameProperty.getInitializer();
+                            return Node.isStringLiteral(initializer) && initializer.getLiteralValue() === 'layout';
+                          }
+                        }
+                        return false;
+                      });
+
+                      if (layoutField && Node.isObjectLiteralExpression(layoutField)) {
+                        const blocksProperty = layoutField.getProperty('blocks');
+                        if (blocksProperty && Node.isPropertyAssignment(blocksProperty)) {
+                          const blocksArray = blocksProperty.getInitializer();
+                          if (blocksArray && Node.isArrayLiteralExpression(blocksArray)) {
+                            // Find and remove the block
+                            const elements = blocksArray.getElements();
+                            for (let i = 0; i < elements.length; i++) {
+                              if (elements[i].getText() === blockName) {
+                                blocksArray.removeElement(i);
+                                break;
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // 2. Remove import
+  const importDeclarations = sourceFile.getImportDeclarations();
+  for (const imp of importDeclarations) {
+    const namedImports = imp.getNamedImports();
+    for (const namedImport of namedImports) {
+      if (namedImport.getName() === blockName) {
+        if (namedImports.length === 1) {
+          imp.remove();
+        } else {
+          namedImport.remove();
+        }
+        break;
+      }
+    }
+  }
+
+  sourceFile.saveSync();
+}
+
+/**
+ * Remove block component from RenderBlocks.tsx
+ */
+export function removeRenderBlocksComponent(componentPath: string, blockSlug: string): void {
+  const blockTypeKey = blockSlug;
+
+  const project = new Project();
+  const sourceFile = project.addSourceFileAtPath(componentPath);
+
+  // 1. Remove from blockComponents object
+  const blockComponents = sourceFile.getVariableDeclaration('blockComponents')?.getInitializer();
+  if (blockComponents && Node.isObjectLiteralExpression(blockComponents)) {
+    const property = blockComponents.getProperty(`'${blockTypeKey}'`) || blockComponents.getProperty(`"${blockTypeKey}"`);
+    if (property) {
+      // Get component name before removing property
+      const assignment = property as PropertyAssignment;
+      const componentName = assignment.getInitializer()?.getText();
+
+      property.remove();
+
+      // 2. Remove import if we found the component name
+      if (componentName) {
+        const importDeclarations = sourceFile.getImportDeclarations();
+        for (const imp of importDeclarations) {
+          // Check default import
+          const defaultImport = imp.getDefaultImport();
+          if (defaultImport && defaultImport.getText() === componentName) {
+            imp.remove();
+            continue;
+          }
+
+          // Check named imports
+          const namedImports = imp.getNamedImports();
+          for (const namedImport of namedImports) {
+            if (namedImport.getName() === componentName) {
+              if (namedImports.length === 1) {
+                imp.remove();
+              } else {
+                namedImport.remove();
+              }
+              break;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  sourceFile.saveSync();
 }

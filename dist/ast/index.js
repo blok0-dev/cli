@@ -7,6 +7,8 @@ exports.findPayloadConfig = findPayloadConfig;
 exports.findRenderBlocksComponent = findRenderBlocksComponent;
 exports.findPagesCollection = findPagesCollection;
 exports.extractComponentName = extractComponentName;
+exports.removePageCollectionConfig = removePageCollectionConfig;
+exports.removeRenderBlocksComponent = removeRenderBlocksComponent;
 const ts_morph_1 = require("ts-morph");
 /**
  * Update Payload page collection config to include new block
@@ -144,8 +146,8 @@ function updateRenderBlocksComponent(componentPath, blockSlug, blockComponentPat
     if (!componentName) {
         throw new Error(`Could not extract component name from ${fullComponentPath}`);
     }
-    // Convert slug to blockType key (camelCase)
-    const blockTypeKey = blockSlug.split('-').map((word, index) => index === 0 ? word : word.charAt(0).toUpperCase() + word.slice(1)).join('');
+    // Use slug directly as blockType key (quoted)
+    const blockTypeKey = blockSlug;
     const project = new ts_morph_1.Project();
     const sourceFile = project.addSourceFileAtPath(componentPath);
     // Find the blockComponents object
@@ -321,4 +323,151 @@ function extractComponentName(componentPath) {
         console.error('Error extracting component name:', error);
         return null;
     }
+}
+/**
+ * Remove block from Pages collection config
+ */
+function removePageCollectionConfig(pagesCollectionPath, blockName) {
+    const project = new ts_morph_1.Project();
+    const sourceFile = project.addSourceFileAtPath(pagesCollectionPath);
+    // 1. Remove from blocks array
+    const pagesExport = sourceFile.getVariableDeclaration('Pages');
+    if (pagesExport) {
+        const pagesObject = pagesExport.getInitializer();
+        if (pagesObject && ts_morph_1.Node.isObjectLiteralExpression(pagesObject)) {
+            const fieldsProperty = pagesObject.getProperty('fields');
+            if (fieldsProperty && ts_morph_1.Node.isPropertyAssignment(fieldsProperty)) {
+                const fieldsArray = fieldsProperty.getInitializer();
+                if (fieldsArray && ts_morph_1.Node.isArrayLiteralExpression(fieldsArray)) {
+                    // Find tabs
+                    const tabsField = fieldsArray.getElements().find(element => {
+                        if (ts_morph_1.Node.isObjectLiteralExpression(element)) {
+                            const typeProperty = element.getProperty('type');
+                            if (ts_morph_1.Node.isPropertyAssignment(typeProperty)) {
+                                const initializer = typeProperty.getInitializer();
+                                return ts_morph_1.Node.isStringLiteral(initializer) && initializer.getLiteralValue() === 'tabs';
+                            }
+                        }
+                        return false;
+                    });
+                    if (tabsField && ts_morph_1.Node.isObjectLiteralExpression(tabsField)) {
+                        const tabsProperty = tabsField.getProperty('tabs');
+                        if (tabsProperty && ts_morph_1.Node.isPropertyAssignment(tabsProperty)) {
+                            const tabsArray = tabsProperty.getInitializer();
+                            if (tabsArray && ts_morph_1.Node.isArrayLiteralExpression(tabsArray)) {
+                                // Find content tab
+                                const contentTab = tabsArray.getElements().find(element => {
+                                    if (ts_morph_1.Node.isObjectLiteralExpression(element)) {
+                                        const labelProperty = element.getProperty('label');
+                                        if (ts_morph_1.Node.isPropertyAssignment(labelProperty)) {
+                                            const initializer = labelProperty.getInitializer();
+                                            return ts_morph_1.Node.isStringLiteral(initializer) && initializer.getLiteralValue() === 'Content';
+                                        }
+                                    }
+                                    return false;
+                                });
+                                if (contentTab && ts_morph_1.Node.isObjectLiteralExpression(contentTab)) {
+                                    const contentFields = contentTab.getProperty('fields');
+                                    if (contentFields && ts_morph_1.Node.isPropertyAssignment(contentFields)) {
+                                        const contentFieldsArray = contentFields.getInitializer();
+                                        if (contentFieldsArray && ts_morph_1.Node.isArrayLiteralExpression(contentFieldsArray)) {
+                                            // Find layout field
+                                            const layoutField = contentFieldsArray.getElements().find(element => {
+                                                if (ts_morph_1.Node.isObjectLiteralExpression(element)) {
+                                                    const nameProperty = element.getProperty('name');
+                                                    if (ts_morph_1.Node.isPropertyAssignment(nameProperty)) {
+                                                        const initializer = nameProperty.getInitializer();
+                                                        return ts_morph_1.Node.isStringLiteral(initializer) && initializer.getLiteralValue() === 'layout';
+                                                    }
+                                                }
+                                                return false;
+                                            });
+                                            if (layoutField && ts_morph_1.Node.isObjectLiteralExpression(layoutField)) {
+                                                const blocksProperty = layoutField.getProperty('blocks');
+                                                if (blocksProperty && ts_morph_1.Node.isPropertyAssignment(blocksProperty)) {
+                                                    const blocksArray = blocksProperty.getInitializer();
+                                                    if (blocksArray && ts_morph_1.Node.isArrayLiteralExpression(blocksArray)) {
+                                                        // Find and remove the block
+                                                        const elements = blocksArray.getElements();
+                                                        for (let i = 0; i < elements.length; i++) {
+                                                            if (elements[i].getText() === blockName) {
+                                                                blocksArray.removeElement(i);
+                                                                break;
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    // 2. Remove import
+    const importDeclarations = sourceFile.getImportDeclarations();
+    for (const imp of importDeclarations) {
+        const namedImports = imp.getNamedImports();
+        for (const namedImport of namedImports) {
+            if (namedImport.getName() === blockName) {
+                if (namedImports.length === 1) {
+                    imp.remove();
+                }
+                else {
+                    namedImport.remove();
+                }
+                break;
+            }
+        }
+    }
+    sourceFile.saveSync();
+}
+/**
+ * Remove block component from RenderBlocks.tsx
+ */
+function removeRenderBlocksComponent(componentPath, blockSlug) {
+    const blockTypeKey = blockSlug;
+    const project = new ts_morph_1.Project();
+    const sourceFile = project.addSourceFileAtPath(componentPath);
+    // 1. Remove from blockComponents object
+    const blockComponents = sourceFile.getVariableDeclaration('blockComponents')?.getInitializer();
+    if (blockComponents && ts_morph_1.Node.isObjectLiteralExpression(blockComponents)) {
+        const property = blockComponents.getProperty(`'${blockTypeKey}'`) || blockComponents.getProperty(`"${blockTypeKey}"`);
+        if (property) {
+            // Get component name before removing property
+            const assignment = property;
+            const componentName = assignment.getInitializer()?.getText();
+            property.remove();
+            // 2. Remove import if we found the component name
+            if (componentName) {
+                const importDeclarations = sourceFile.getImportDeclarations();
+                for (const imp of importDeclarations) {
+                    // Check default import
+                    const defaultImport = imp.getDefaultImport();
+                    if (defaultImport && defaultImport.getText() === componentName) {
+                        imp.remove();
+                        continue;
+                    }
+                    // Check named imports
+                    const namedImports = imp.getNamedImports();
+                    for (const namedImport of namedImports) {
+                        if (namedImport.getName() === componentName) {
+                            if (namedImports.length === 1) {
+                                imp.remove();
+                            }
+                            else {
+                                namedImport.remove();
+                            }
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    sourceFile.saveSync();
 }

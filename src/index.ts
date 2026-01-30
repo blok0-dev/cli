@@ -6,6 +6,7 @@ import { checkEmptyDirectory } from './detectors';
 import { generateStarter } from './handlers/generate';
 import { handleLogin, handleLogout } from './handlers/login';
 import { handleAddBlock } from './handlers/add-block';
+import { handleRemoveBlock } from './handlers/remove-block';
 import { createEmptyRegistry } from './registry';
 
 function prompt(question: string): Promise<string> {
@@ -35,7 +36,7 @@ COMMANDS:
   generate starter [folder] Generate PayloadCMS starter project
   add block <url>          Add a block from remote API
   update block <id>        Update existing block (future)
-  remove block <id>        Remove block and clean up (future)
+  remove block <id>        Remove block and clean up
   registry validate        Validate registry integrity (future)
 
 OPTIONS:
@@ -123,8 +124,25 @@ async function main() {
         }
         break;
 
-      case 'update':
       case 'remove':
+        const [removeSubcommand, ...removeRestArgs] = restArgs;
+        if (removeSubcommand === 'block') {
+          const blockId = removeRestArgs[0];
+          if (!blockId) {
+            console.error('Error: Block ID/Slug is required. Use: blok0 remove block <id>');
+            process.exit(1);
+          }
+          const options = {
+            dryRun: removeRestArgs.includes('--dry-run')
+          };
+          await handleRemoveBlock(blockId, options);
+        } else {
+          console.error('Error: Invalid subcommand. Use: blok0 remove block <id>');
+          process.exit(1);
+        }
+        break;
+
+      case 'update':
       case 'registry':
         console.log(`${command} functionality coming soon...`);
         break;

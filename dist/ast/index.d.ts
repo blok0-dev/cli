@@ -29,3 +29,11 @@ export declare function findPagesCollection(): string | null;
  * Extract the component name from a Component.tsx file
  */
 export declare function extractComponentName(componentPath: string): string | null;
+/**
+ * Remove block from Pages collection config
+ */
+export declare function removePageCollectionConfig(pagesCollectionPath: string, blockName: string): void;
+/**
+ * Remove block component from RenderBlocks.tsx
+ */
+export declare function removeRenderBlocksComponent(componentPath: string, blockSlug: string): void;
